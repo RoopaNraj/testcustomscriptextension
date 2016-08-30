@@ -1,0 +1,240 @@
+﻿{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "csedemostg1Type": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ]
+        },
+        "csedemovm1Name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "csedemovm1AdminUserName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "csedemovm1AdminPassword": {
+            "type": "securestring"
+        },
+        "csedemovm1WindowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2012-R2-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "Windows-Server-Technical-Preview"
+            ]
+        },
+        "_artifactsLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
+            }
+        },
+        "_artifactsLocationSasToken": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Auto-generated token to access _artifactsLocation"
+            }
+        },
+        "csediag1Type": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ]
+        }
+    },
+    "variables": {
+        "csedemostg1Name": "[concat('csedemostg1', uniqueString(resourceGroup().id))]",
+        "csedemovn1Prefix": "10.0.0.0/16",
+        "csedemovn1Subnet1Name": "Subnet-1",
+        "csedemovn1Subnet1Prefix": "10.0.0.0/24",
+        "csedemovn1Subnet2Name": "Subnet-2",
+        "csedemovn1Subnet2Prefix": "10.0.1.0/24",
+        "csedemovm1ImagePublisher": "MicrosoftWindowsServer",
+        "csedemovm1ImageOffer": "WindowsServer",
+        "csedemovm1OSDiskName": "csedemovm1OSDisk",
+        "csedemovm1VmSize": "Standard_D1",
+        "csedemovm1VnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'csedemovn1')]",
+        "csedemovm1SubnetRef": "[concat(variables('csedemovm1VnetID'), '/subnets/', variables('csedemovn1Subnet1Name'))]",
+        "csedemovm1StorageAccountContainerName": "vhds",
+        "csedemovm1NicName": "[concat(parameters('csedemovm1Name'), 'NetworkInterface')]",
+        "cswe1ScriptFilePath": "CSE-FailureScenario/CustomScripts/cswe1.ps1",
+        "csediag1Name": "[concat('csediag1', uniqueString(resourceGroup().id))]",
+        "csename": "cswe1"
+    },
+    "resources": [
+        {
+            "name": "[variables('csedemostg1Name')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "csedemostg1"
+            },
+            "properties": {
+                "accountType": "[parameters('csedemostg1Type')]"
+            }
+        },
+        {
+            "name": "csedemovn1",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "csedemovn1"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('csedemovn1Prefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('csedemovn1Subnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('csedemovn1Subnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('csedemovn1Subnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('csedemovn1Subnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('csedemovm1NicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'csedemovn1')]"
+            ],
+            "tags": {
+                "displayName": "csedemovm1Nic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('csedemovm1SubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('csedemovm1Name')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('csedemostg1Name'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('csedemovm1NicName'))]"
+            ],
+            "tags": {
+                "displayName": "csedemovm1"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('csedemovm1VmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('csedemovm1Name')]",
+                    "adminUsername": "[parameters('csedemovm1AdminUsername')]",
+                    "adminPassword": "[parameters('csedemovm1AdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('csedemovm1ImagePublisher')]",
+                        "offer": "[variables('csedemovm1ImageOffer')]",
+                        "sku": "[parameters('csedemovm1WindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "csedemovm1OSDisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('csedemostg1Name'), '.blob.core.windows.net/', variables('csedemovm1StorageAccountContainerName'), '/', variables('csedemovm1OSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('csedemovm1NicName'))]"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "name": "[variables('csename')]",
+                    "type": "extensions",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2015-06-15",
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', parameters('csedemovm1Name'))]"
+                    ],
+                    "tags": {
+                        "displayName": "cswe1"
+                    },
+                  "properties": {
+                    "publisher": "Microsoft.Compute",
+                    "type": "CustomScriptExtension",
+                    "typeHandlerVersion": "1.4",
+                    "autoUpgradeMinorVersion": true,
+                    "settings": {
+                      "fileUris": [
+                        "[concat(parameters('_artifactsLocation'), '/', variables('cswe1ScriptFilePath'), parameters('_artifactsLocationSasToken'))]"
+                      ],
+                      "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('cswe1ScriptFilePath'), ' -RGName ', resourceGroup().name, ' -VMName ', parameters('csedemovm1Name'), ' -CSName ', variables('csename'))]",
+                      "timestamp": 123456789
+                    }
+                  }
+                }
+            ]
+        },
+        {
+            "name": "[variables('csediag1Name')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "csediag1"
+            },
+            "properties": {
+                "accountType": "[parameters('csediag1Type')]"
+            }
+        }
+        
+    ],
+    "outputs": {
+    }
+}
